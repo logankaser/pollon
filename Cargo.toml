@@ -1,0 +1,12 @@
+[package]
+name = "pollon"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = { version = "0.7.7", features = ["macros"] }
+axum-embed = "0.1.0"
+dotenv = "0.15.0"
+rust-embed = "8.4.0"
+serde = { version = "1.0.210", features = ["derive"]}
+tokio = { version = "1.40.0", features = ["full"] }

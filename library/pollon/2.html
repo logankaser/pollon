@@ -1,0 +1,17 @@
+<article>
+<h3>Node</h3>
+Each node is just an HTML fragment stored on the server as a file
+For example a document with one node would look like:
+`document/0.html`
+<pre>html
+&ltarticle>
+Unformatted text
+&lt/article>
+</pre>
+As nodes are normal HTML files they can be edited by hand or read by basic tools.
+You could swap the order of nodes with just `mv` .
+Render a document from within the document folder:
+<pre>cat $(ls -1v)</pre> 
+Render and open in browser:
+<pre>d=/tmp/doc.html;cat $(ls -1v) > $d;xdg-open $d</pre>
+</article>
