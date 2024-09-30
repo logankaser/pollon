@@ -16,7 +16,7 @@ The only files it contains are it’s nodes
 Each node is just an HTML fragment stored on the server as a file
 For example a document with one node would look like:
 `document/0.html`
-<pre>html
+<pre>
 &ltarticle>
 Unformatted text
 &lt/article>
