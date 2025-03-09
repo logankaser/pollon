@@ -1,6 +1,7 @@
 use axum::{
+    body::Body,
     extract::{FromRequest, Path as UrlPath, Query, State},
-    http::StatusCode,
+    http::{header::InvalidHeaderValue, HeaderValue, StatusCode},
     response::{Html, IntoResponse, Response},
     routing::get,
     Router,
@@ -60,6 +61,12 @@ impl From<std::env::VarError> for ApiError {
     }
 }
 
+impl From<InvalidHeaderValue> for ApiError {
+    fn from(error: InvalidHeaderValue) -> Self {
+        Self::Simple(error.to_string())
+    }
+}
+
 // Custom Error formating
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
@@ -102,15 +109,15 @@ async fn main() {
     let state = AppState::new();
     println!("Serving {:?}", state.library);
     let api = Router::new()
-        .route("/:document", get(document).post(document_append))
+        .route("/{document}", get(document).post(document_append))
         .route(
-            "/:document/:node",
+            "/{document}/{node}",
             get(node_get).put(node_replace).delete(node_delete),
         )
         .with_state(state);
     let client_assets = ServeEmbed::<ClientAssets>::new();
     let app = Router::new()
-        .nest("/", api)
+        .merge(api)
         .nest_service("/client", client_assets);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:8080")
         .await
@@ -143,20 +150,20 @@ fn path_append_normal<'a>(
 
 #[derive(Deserialize)]
 struct NodeSet {
-    nodes: String,
+    nodes: Option<String>,
 }
 
 async fn document(
     UrlPath(doc_raw): UrlPath<String>,
-    nodes: Option<Query<NodeSet>>,
+    query: Query<NodeSet>,
     State(state): State<AppState>,
 ) -> Result<Html<String>, ApiError> {
     let mut rendered = String::new();
     let mut paths = vec![];
     let mut doc_path = state.library.clone();
     let doc_path = path_append_normal(&mut doc_path, &doc_raw)?;
-    if let Some(nodes) = nodes {
-        let nodes = nodes.nodes.split(",");
+    if let Some(nodes) = &query.nodes {
+        let nodes = nodes.split(",");
         for node in nodes {
             let node = format!("{}.html", node);
             let mut path = doc_path.clone();
@@ -176,8 +183,10 @@ async fn document(
     }
     for path in paths {
         // TODO use spawn blocking to reduce thread spam.
-        let file = tokio::fs::read(path).await?;
-        rendered.push_str(std::str::from_utf8(&file)?);
+        let result = tokio::fs::read(path).await;
+        if let Ok(file) = result {
+            rendered.push_str(std::str::from_utf8(&file)?);
+        }
     }
     Ok(Html(rendered))
 }
@@ -223,7 +232,7 @@ async fn document_append(
     UrlPath(doc_raw): UrlPath<String>,
     State(state): State<AppState>,
     node_body: String,
-) -> Result<StatusCode, ApiError> {
+) -> Result<Response<Body>, ApiError> {
     let mut doc_path = state.library.clone();
     let doc_path = path_append_normal(&mut doc_path, &doc_raw)?;
     let mut dir = tokio::fs::read_dir(doc_path).await?;
@@ -250,9 +259,14 @@ async fn document_append(
     let mut file = tokio::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
-        .open(node_path)
+        .open(&node_path)
         .await?;
     file.write_all(node_body.as_bytes()).await?;
     file.flush().await?;
-    Ok(StatusCode::OK)
+    let mut response = StatusCode::OK.into_response();
+    response.headers_mut().insert(
+        "Content-Location",
+        HeaderValue::from_str(node_path.to_str().unwrap_or(""))?,
+    );
+    Ok(response)
 }

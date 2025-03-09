@@ -1,0 +1,58 @@
+<head>
+<script type="module">
+async function fetchDocument() {
+  const response = await fetch("/pollon")
+  const html = await response.text()
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+  document.getRootNode().body.innerHTML = doc.body.innerHTML;
+  document.getRootNode().head.innerHTML = doc.head.innerHTML;
+};
+await fetchDocument();
+const body = document.getRootNode().body;
+const placeholder_text = "<Node Placeholder>"
+function makePlaceholder() {
+  const ph = document.createElement("article");
+  ph.setAttribute("contenteditable", "true");
+  ph.innerText = placeholder_text;
+  ph.addEventListener("focus", () => ph.innerText = "", {once: true});
+  return ph;
+}
+function findId(target) {
+  let i = 1
+  for (const child of body.children) {
+    if (child == target) {
+      break;
+    }
+    i += 1;
+  }
+  return i;
+}
+
+body.appendChild(makePlaceholder());
+function update(ev) {
+    const target = ev.target;
+    const node_url = `/pollon/${findId(target)}`;
+    let payload;
+    if (target.innerHTML != "<br>") {
+      payload = {
+        method: "PUT",
+        body: target.outerHTML
+      };
+    } else {
+      payload = {method: "DELETE"};
+      target.remove();
+    }
+    fetch(node_url, payload);
+    if (body.lastChild && body.lastChild.innerText != placeholder_text) {
+      const new_placeholder = makePlaceholder();
+      new_placeholder.addEventListener("input", update);
+      body.appendChild(new_placeholder);
+    }
+}
+for (const article of body.children) {
+  article.setAttribute("contenteditable", "true");
+  article.addEventListener("input", update);
+}
+</script>
+</head>
